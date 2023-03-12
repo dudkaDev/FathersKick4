@@ -7,27 +7,39 @@
 
 import UIKit
 
+enum Section {
+    case main
+}
+
+struct Cell: Hashable {
+    var number: Int
+    var isTap = false
+}
+
 class ViewController: UIViewController {
     
-    private let idTableViewCell = "idTableViewCell"
-    
     private let tableView: UITableView = {
-        let tableView = UITableView()
-        tableView.layer.cornerRadius = 10
+        let tableView = UITableView(frame: .zero, style: .insetGrouped)
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
         tableView.bounces = false
         tableView.translatesAutoresizingMaskIntoConstraints = false
         return tableView
     }()
     
+    private var numbers = [Cell]()
+    var dataSource: UITableViewDiffableDataSource<Section, Cell>!
+    
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-            
+        
         setupNavBar()
         setupViews()
+        fillNumbersArray()
         setConstraints()
         setDelegates()
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: idTableViewCell)
-        
+        setupDataSource()
+        updateDataSource()
     }
     
     private func setupNavBar() {
@@ -47,60 +59,45 @@ class ViewController: UIViewController {
         view.addSubview(tableView)
     }
     
+    private func fillNumbersArray() {
+        for num in 0...30 {
+            numbers.append(Cell(number: num))
+        }
+    }
+    
     private func setDelegates() {
         tableView.delegate = self
-        tableView.dataSource = self
+    }
+    
+    private func setupDataSource() {
+        dataSource = UITableViewDiffableDataSource(tableView: tableView, cellProvider: { tableView, indexPath, model -> UITableViewCell? in
+            let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
+            cell.textLabel?.text = "\(model.number)"
+            cell.accessoryType = model.isTap ? .checkmark : .none
+            return cell
+        })
+        dataSource.defaultRowAnimation = .fade
+    }
+    
+    private func updateDataSource() {
+        var snapshot = NSDiffableDataSourceSnapshot<Section,Cell>()
+        snapshot.appendSections([.main])
+        snapshot.appendItems(numbers)
+        dataSource.apply(snapshot, animatingDifferences: true)
     }
     
     @objc func shuffleButtonTapped() {
-        var cellIndexes = [Int]()
-        for i in 0..<tableView.numberOfRows(inSection: 0) {
-            cellIndexes.append(i)
-        }
-        cellIndexes.shuffle()
-        
-        tableView.beginUpdates()
-        for i in 0..<cellIndexes.count {
-            let indexPath = IndexPath(row: cellIndexes[i], section: 0)
-            tableView.moveRow(at: indexPath, to: IndexPath(row: i, section: 0))
-        }
-        tableView.endUpdates()
+        numbers.shuffle()
+        updateDataSource()
     }
     
     private func setConstraints() {
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 0),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 0)
         ])
-    }
-}
-
-//MARK: - UITableViewDataSource
-
-extension ViewController: UITableViewDataSource {
-    
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        35
-    }
-    
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: idTableViewCell, for: indexPath)
-        cell.textLabel?.text = "\(indexPath.row)"
-        return cell
-    }
-    
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        tableView.deselectRow(at: indexPath, animated: true)
-        
-        if tableView.cellForRow(at: indexPath)?.accessoryType == UITableViewCell.AccessoryType.checkmark {
-            tableView.cellForRow(at: indexPath)?.accessoryType = UITableViewCell.AccessoryType.none
-        } else {
-            tableView.cellForRow(at: indexPath)?.accessoryType = UITableViewCell.AccessoryType.checkmark
-            let destinationIndexPath = NSIndexPath(row: 0, section: indexPath.section)
-            tableView.moveRow(at: indexPath, to: destinationIndexPath as IndexPath)
-        }
     }
 }
 
@@ -108,8 +105,22 @@ extension ViewController: UITableViewDataSource {
 
 extension ViewController: UITableViewDelegate {
     
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
-        40
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        guard let selectedCell = dataSource.itemIdentifier(for: indexPath) else { return }
+        
+        if selectedCell.isTap {
+            var updatedCell = selectedCell
+            updatedCell.isTap.toggle()
+            numbers.removeAll(where: { $0.number == selectedCell.number })
+            numbers.insert(updatedCell, at: indexPath.row)
+        } else {
+            var updatedCell = selectedCell
+            updatedCell.isTap.toggle()
+            numbers.removeAll(where: { $0.number == selectedCell.number })
+            numbers.insert(updatedCell, at: 0)
+        }
+        
+        updateDataSource()
+        tableView.deselectRow(at: indexPath, animated: true)
     }
 }
-
